@@ -40,9 +40,34 @@ portfolio piece demonstrating production-grade RAG patterns.
 6. What are the six main lessons in the book?
 7. What does Kiyosaki say about fear and greed in financial decisions?
 
+## Sample Q&A (Day 3 baseline)
+
+### Q: What is the difference between an asset and a liability?
+**A**: According to Robert Kiyosaki, the difference between an asset and a liability is that:
+
+* An asset puts money in my pocket (Source 1 — page 61, Source 5 — page 63).
+* A liability takes money out of my pocket (Source 1 — page 61, Source 5 — page 63).
+
+Sources: [page 61, page 63]
+
+_Latency: retrieve 60ms, generate 108.4s_
+
+### Q: Who is the rich dad and who is the poor dad?
+**A**: The rich dad is Robert Kiyosaki's best friend's father, a high school dropout who was wealthy. The poor dad is Robert Kiyosaki's own biological father, who was highly educated but struggled financially.
+
+Sources: [page 229, page 20]
+
+_Latency: retrieve 70ms, generate 82.7s_
+
+> Note: This is the unoptimized baseline (vector-only retrieval, no reranking, no
+> citation validation, llama3.1:8b on CPU). Hybrid retrieval, reranking, and
+> citation enforcement come in later phases and will improve both accuracy and
+> source faithfulness. The ~90s generate latency is CPU-bound — would drop
+> dramatically on GPU.
+
 ## Progress log
 - [x] **Day 1**: Project setup, Ollama installed, models pulled, folder structure, deps installed
-- [~] **Phase 1**: Hello World RAG (ingestion + retrieval done; generation pending)
+- [x] **Phase 1**: Hello World RAG (basic vector search + LLM) ← end-to-end working
 - [ ] **Phase 2**: Observability (Langfuse tracing, latency, cost)
 - [ ] **Phase 3**: Evaluation foundation (golden set + RAGAS)
 - [ ] **Phase 4**: Hybrid retrieval + reranking
@@ -77,3 +102,11 @@ portfolio piece demonstrating production-grade RAG patterns.
 - Search test passed: 5/5 queries returned relevant chunks (4 excellent, 1 decent)
 - Noted for Phase 4: vector-only retrieval is weak on rare specific phrases (e.g., "rat race") — hybrid (BM25 + vector) will fix this
 - Goal for Day 3: wire generation (LLM call) into the pipeline for first end-to-end RAG
+
+### Day 3 — 2026-06-02
+- Built LLM wrapper (llama3.1:8b), prompt template, and Retriever class
+- First end-to-end RAG working: question -> retrieve -> generate -> answer
+- Avg latency: 0.06s retrieve, 89.18s generate (CPU)
+- 5/5 questions answered; 4 excellent + 1 OK (rat race — weak retrieval flowed through)
+- Captured 2 sample Q&A pairs in README
+- Goal for Day 4: improve retrieval (add BM25 + hybrid) OR add Streamlit UI (TBD)
