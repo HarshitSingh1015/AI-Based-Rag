@@ -42,7 +42,7 @@ portfolio piece demonstrating production-grade RAG patterns.
 
 ## Progress log
 - [x] **Day 1**: Project setup, Ollama installed, models pulled, folder structure, deps installed
-- [ ] **Phase 1**: Hello World RAG (basic vector search + LLM)
+- [~] **Phase 1**: Hello World RAG (ingestion + retrieval done; generation pending)
 - [ ] **Phase 2**: Observability (Langfuse tracing, latency, cost)
 - [ ] **Phase 3**: Evaluation foundation (golden set + RAGAS)
 - [ ] **Phase 4**: Hybrid retrieval + reranking
@@ -69,3 +69,11 @@ portfolio piece demonstrating production-grade RAG patterns.
 - Set up project skeleton with uv
 - Tested first LLM call from terminal
 - Goal for Day 2: write PDF loader and basic chunker
+
+### Day 2 — 2026-06-02
+- Built PDF loader, chunker, embedder, and ChromaDB store
+- Ingested full book: 227 pages -> 1057 chunks -> all embedded -> stored
+- Embedding pipeline took ~4.4 min (~252 ms/chunk on CPU)
+- Search test passed: 5/5 queries returned relevant chunks (4 excellent, 1 decent)
+- Noted for Phase 4: vector-only retrieval is weak on rare specific phrases (e.g., "rat race") — hybrid (BM25 + vector) will fix this
+- Goal for Day 3: wire generation (LLM call) into the pipeline for first end-to-end RAG
