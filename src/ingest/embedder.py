@@ -1,15 +1,20 @@
 """Embedding utility using Ollama's nomic-embed-text model."""
 import ollama
+from langfuse.decorators import observe, langfuse_context
 
 EMBED_MODEL = "nomic-embed-text"
 EMBED_DIM = 768
 
 
+@observe(name="embed_text")
 def embed_text(text: str) -> list[float]:
     """Embed a single text string into a vector."""
     if not text or not text.strip():
         raise ValueError("Cannot embed empty text")
     response = ollama.embeddings(model=EMBED_MODEL, prompt=text)
+    langfuse_context.update_current_observation(
+        metadata={"model": EMBED_MODEL, "input_length_chars": len(text)},
+    )
     return response["embedding"]
 
 

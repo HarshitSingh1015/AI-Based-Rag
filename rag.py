@@ -1,9 +1,18 @@
-"""End-to-end RAG: question -> retrieve -> generate -> answer."""
+"""End-to-end RAG: question -> retrieve -> generate -> answer.
+Each call is fully traced in Langfuse.
+"""
+import atexit
 import time
 
+from langfuse.decorators import observe, langfuse_context
+
+from src.observability.tracer import init as init_langfuse, flush as flush_langfuse
 from src.retrieval.retriever import Retriever
 from src.generate.prompt import build_messages
 from src.generate.llm import generate
+
+init_langfuse()
+atexit.register(flush_langfuse)
 
 TEST_QUESTIONS = [
     "What is the difference between an asset and a liability?",
@@ -15,6 +24,7 @@ TEST_QUESTIONS = [
 TOP_K = 5
 
 
+@observe(name="rag_query")
 def answer(question: str, retriever: Retriever, top_k: int = TOP_K, verbose: bool = True) -> dict:
     """Run a full RAG cycle and return the answer + metadata."""
     t0 = time.time()
@@ -38,7 +48,7 @@ def answer(question: str, retriever: Retriever, top_k: int = TOP_K, verbose: boo
         print(f"\nAnswer (generated in {t_generate:.2f}s):")
         print(response)
 
-    return {
+    result = {
         "question": question,
         "answer": response,
         "chunks": chunks,
@@ -47,9 +57,21 @@ def answer(question: str, retriever: Retriever, top_k: int = TOP_K, verbose: boo
         "latency_total_s": t_retrieve + t_generate,
     }
 
+    langfuse_context.update_current_observation(
+        input={"question": question, "top_k": top_k},
+        output=response,
+        metadata={
+            "latency_retrieve_s": t_retrieve,
+            "latency_generate_s": t_generate,
+            "latency_total_s": t_retrieve + t_generate,
+            "num_chunks": len(chunks),
+        },
+    )
+    return result
+
 
 def main() -> None:
-    print("=== END-TO-END RAG TEST ===")
+    print("=== END-TO-END RAG TEST (with Langfuse tracing) ===")
     retriever = Retriever()
     print(f"Collection size: {retriever.collection.count()}\n")
 
@@ -67,6 +89,8 @@ def main() -> None:
     print(f"Avg total latency:    {avg_total:.2f}s")
     print(f"Avg retrieve latency: {avg_retrieve:.2f}s")
     print(f"Avg generate latency: {avg_generate:.2f}s")
+    print("\nView traces at: https://cloud.langfuse.com")
+    flush_langfuse()
 
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "chromadb>=1.5.9",
+    "langfuse>=2.50.0,<3.0.0",
     "ollama>=0.6.2",
     "pypdf>=6.12.2",
     "python-dotenv>=1.2.2",

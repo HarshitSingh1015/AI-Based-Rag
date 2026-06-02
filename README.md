@@ -65,10 +65,43 @@ _Latency: retrieve 70ms, generate 82.7s_
 > source faithfulness. The ~90s generate latency is CPU-bound — would drop
 > dramatically on GPU.
 
+## Observability Baseline (Day 4)
+
+All RAG queries are traced via Langfuse. Each query produces a nested trace
+tree:
+
+```
+rag_query                          (root span — full user query)
+├── retrieve                       (Retriever.retrieve method)
+│   └── embed_text                 (nomic-embed-text on the question)
+└── llm_generate                   (llama3.1:8b — tagged as "generation")
+```
+
+After running `rag.py` with the 5 test questions, baseline numbers from the
+Langfuse dashboard:
+
+| Metric | Value |
+|--------|-------|
+| Avg retrieve latency (incl. query embed) | ~0.67s |
+| Avg LLM generation latency | ~95.5s |
+| Avg total query latency | ~96.2s |
+| Avg input tokens per LLM call | ~900 (5 chunks × ~150 tokens + system + question) |
+| Avg output tokens per LLM call | ~80 (concise grounded answers) |
+| LLM model | llama3.1:8b (local, Ollama) |
+| Embedding model | nomic-embed-text (local, Ollama) |
+
+![Langfuse trace example](docs/langfuse_trace.png)
+
+These are the **pre-optimization baselines**. Future phases will add hybrid
+retrieval, reranking, citation enforcement, and CI-gated evals — each
+measured against these numbers. The "Cost" column in the Langfuse dashboard
+will show $0 because Langfuse doesn't ship pricing for local Ollama models;
+that's expected.
+
 ## Progress log
 - [x] **Day 1**: Project setup, Ollama installed, models pulled, folder structure, deps installed
-- [x] **Phase 1**: Hello World RAG (basic vector search + LLM) ← end-to-end working
-- [ ] **Phase 2**: Observability (Langfuse tracing, latency, cost)
+- [x] **Phase 1**: Hello World RAG (basic vector search + LLM)
+- [x] **Phase 2**: Observability (Langfuse tracing, latency, token usage)
 - [ ] **Phase 3**: Evaluation foundation (golden set + RAGAS)
 - [ ] **Phase 4**: Hybrid retrieval + reranking
 - [ ] **Phase 5**: Citation enforcement
@@ -110,3 +143,11 @@ _Latency: retrieve 70ms, generate 82.7s_
 - 5/5 questions answered; 4 excellent + 1 OK (rat race — weak retrieval flowed through)
 - Captured 2 sample Q&A pairs in README
 - Goal for Day 4: improve retrieval (add BM25 + hybrid) OR add Streamlit UI (TBD)
+
+### Day 4 — 2026-06-02
+- Added Langfuse observability to embed_text, retrieve, llm_generate, and rag_query
+- Created singleton Langfuse client in src/observability/tracer.py
+- Verified nested trace tree in Langfuse Cloud with token usage on llm_generate
+- Captured baseline latency + token-usage metrics in README
+- Saved trace screenshot to docs/langfuse_trace.png (user-captured)
+- Goal for Day 5: build Streamlit UI for browser-based interaction
