@@ -1,4 +1,4 @@
-# Rich Dad Poor Dad RAG
+# Multi-Doc RAG (started with Rich Dad Poor Dad)
 
 A 100% local, free RAG (Retrieval-Augmented Generation) system that lets me ask
 questions about *Rich Dad Poor Dad* by Robert Kiyosaki, with answers grounded
@@ -119,11 +119,33 @@ Features:
 - Per-query latency metrics (retrieve / generate / total)
 - Every query is still traced in Langfuse — open the dashboard alongside
 
+## Adding More Books (Day 5.5)
+
+The system supports any number of PDF books, papers, or notes. To add more:
+
+1. Drop any PDF into `data/raw/`
+2. Run:
+   ```bash
+   uv run python ingest.py data/raw/<your_file>.pdf
+   ```
+3. Or ingest everything in the folder at once:
+   ```bash
+   uv run python ingest.py --all
+   ```
+4. Refresh the Streamlit app — the sidebar will list the new book.
+
+All books share one ChromaDB collection. Retrieval picks the most relevant
+chunks regardless of source, and citations include the source filename
+and page number.
+
+**Note**: Embedding takes ~5-30 minutes per book on CPU. Be patient.
+
 ## Progress log
 - [x] **Day 1**: Project setup, Ollama installed, models pulled, folder structure, deps installed
 - [x] **Phase 1**: Hello World RAG (basic vector search + LLM)
 - [x] **Phase 2**: Observability (Langfuse tracing, latency, token usage)
 - [x] **Day 5**: Streamlit web UI ← demoable!
+- [x] **Day 5.5**: Multi-document support via CLI
 - [ ] **Phase 3**: Evaluation foundation (golden set + RAGAS)
 - [ ] **Phase 4**: Hybrid retrieval + reranking
 - [ ] **Phase 5**: Citation enforcement
@@ -183,3 +205,11 @@ Features:
 - Saved demo screenshot to docs/app_screenshot.png
 - First demoable version of the app
 - Goal for Day 6: start Phase 3 (evaluation foundation) — build golden Q&A set + RAGAS scoring
+
+### Day 5.5 — 2026-06-02
+- Added CLI argument support to ingest.py (single file or --all)
+- Updated system prompt to be book-agnostic with multi-source citations
+- Added Library section to Streamlit sidebar showing all loaded books
+- Verified idempotency: re-running ingest on `rich_dad_poor_dad.pdf` left collection unchanged at 1057 chunks (`add_chunks` correctly reported "All chunks already in collection — nothing to add.")
+- Multi-doc verification with a second PDF was skipped today; will validate manually when a second book is ingested
+- Goal for Day 6: build the eval foundation (golden set + RAGAS)

@@ -1,5 +1,7 @@
-"""Streamlit web UI for the Rich Dad Poor Dad RAG system."""
+"""Streamlit web UI for the multi-document RAG system."""
 import atexit
+from collections import Counter
+
 import streamlit as st
 
 from src.observability.tracer import init as init_langfuse, flush as flush_langfuse
@@ -7,7 +9,7 @@ from src.retrieval.retriever import Retriever
 from rag import answer
 
 st.set_page_config(
-    page_title="Rich Dad Poor Dad RAG",
+    page_title="Multi-Doc RAG",
     page_icon="📚",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -22,6 +24,13 @@ def setup() -> Retriever:
     return Retriever()
 
 
+def get_library_stats(retriever: Retriever) -> dict[str, int]:
+    """Count chunks per source filename in the collection."""
+    items = retriever.collection.get(include=["metadatas"])
+    sources = [m["source"] for m in items["metadatas"]]
+    return dict(Counter(sources))
+
+
 retriever = setup()
 
 if "history" not in st.session_state:
@@ -29,7 +38,7 @@ if "history" not in st.session_state:
 
 
 def render_entry(entry: dict) -> None:
-    """Render a single Q&A entry (answer + sources + latency metrics)."""
+    """Render a single Q&A entry."""
     with st.chat_message("user"):
         st.write(entry["question"])
     with st.chat_message("assistant"):
@@ -38,7 +47,8 @@ def render_entry(entry: dict) -> None:
         with st.expander(f"📖 Sources ({len(entry['chunks'])} chunks)"):
             for c in entry["chunks"]:
                 st.markdown(
-                    f"**Page {c['page_num']}** — distance `{c['distance']:.3f}`"
+                    f"**{c['source']}** — page {c['page_num']} — "
+                    f"distance `{c['distance']:.3f}`"
                 )
                 st.text(c["text"])
                 st.divider()
@@ -50,11 +60,11 @@ def render_entry(entry: dict) -> None:
 
 
 with st.sidebar:
-    st.title("📚 Rich Dad Poor Dad RAG")
+    st.title("📚 Multi-Doc RAG")
     st.markdown(
         """
-A local, free RAG system over Robert Kiyosaki's
-*Rich Dad Poor Dad*.
+A local, free RAG system that answers questions
+across your personal book library.
 
 **Stack**
 - LLM: `llama3.1:8b` (Ollama)
@@ -66,53 +76,65 @@ A local, free RAG system over Robert Kiyosaki's
     )
 
     st.divider()
-    st.subheader("Settings")
-    top_k = st.slider("Chunks to retrieve (top_k)", min_value=1, max_value=10, value=5)
+    st.subheader("📚 Library")
+    library = get_library_stats(retriever)
+    if library:
+        st.metric("Total chunks", retriever.collection.count())
+        st.write(f"**{len(library)} book(s) loaded:**")
+        for source, count in sorted(library.items()):
+            st.markdown(f"- `{source}` ({count} chunks)")
+    else:
+        st.warning(
+            "No books loaded yet. From the project folder run:\n\n"
+            "`uv run python ingest.py data/raw/<your_book.pdf>`"
+        )
 
     st.divider()
-    st.metric("Indexed chunks", retriever.collection.count())
+    st.subheader("Settings")
+    top_k = st.slider(
+        "Chunks to retrieve (top_k)",
+        min_value=1, max_value=10, value=5,
+    )
 
     st.divider()
     if st.button("🗑️ Clear chat history", use_container_width=True):
         st.session_state.history = []
         st.rerun()
 
+    if st.button("🔄 Refresh library", use_container_width=True):
+        st.cache_resource.clear()
+        st.rerun()
+
     st.divider()
-    st.caption(
-        "Traces are live at "
-        "[Langfuse dashboard](https://cloud.langfuse.com)"
-    )
+    st.caption("Traces: [Langfuse dashboard](https://cloud.langfuse.com)")
 
-st.title("Ask Rich Dad Poor Dad")
-st.caption(
-    "Answers grounded in the book, with cited page numbers and full observability."
-)
 
-with st.expander("💡 Example questions to try"):
+st.title("Ask Your Library")
+st.caption("Get answers from your books, with cited sources and page numbers.")
+
+with st.expander("💡 Tips for asking good questions"):
     st.markdown(
         """
-- What is the difference between an asset and a liability?
-- Who is the rich dad and who is the poor dad?
-- What is the rat race?
-- What does Kiyosaki say about traditional education?
-- Why do most people stay poor according to Kiyosaki?
-- What does Kiyosaki say about owning a house?
-- What are the six main lessons in the book?
+- **Be specific**: *"What does Kiyosaki say about assets?"* beats *"tell me about money"*
+- **Ask one thing at a time** for best results
+- **Scope by book** if you want: *"In Atomic Habits, what is habit stacking?"*
+- **Citations** show which book + page each answer is drawn from
+- Add more books anytime with `uv run python ingest.py <pdf_path>`
 """
     )
 
 for entry in st.session_state.history:
     render_entry(entry)
 
-query = st.chat_input("Ask a question about the book...")
+query = st.chat_input("Ask a question about anything in your library...")
 
 if query:
     with st.chat_message("user"):
         st.write(query)
     with st.chat_message("assistant"):
         with st.spinner(
-            f"Searching {retriever.collection.count()} chunks and generating answer "
-            "(this takes 20-60s on CPU)..."
+            f"Searching {retriever.collection.count()} chunks across "
+            f"{len(library)} book(s)... (20-60s on CPU)"
         ):
             result = answer(query, retriever, top_k=top_k, verbose=False)
             flush_langfuse()
@@ -122,7 +144,8 @@ if query:
         with st.expander(f"📖 Sources ({len(result['chunks'])} chunks)"):
             for c in result["chunks"]:
                 st.markdown(
-                    f"**Page {c['page_num']}** — distance `{c['distance']:.3f}`"
+                    f"**{c['source']}** — page {c['page_num']} — "
+                    f"distance `{c['distance']:.3f}`"
                 )
                 st.text(c["text"])
                 st.divider()

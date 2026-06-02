@@ -1,19 +1,19 @@
-"""RAG prompt template construction."""
+"""RAG prompt template construction (multi-document)."""
 
-SYSTEM_PROMPT = """You are a helpful assistant answering questions about the book \
-*Rich Dad Poor Dad* by Robert Kiyosaki.
+SYSTEM_PROMPT = """You are a helpful assistant answering questions based ONLY on the \
+provided book/document context.
 
 Rules you must follow:
 1. Answer ONLY using the context provided below. Do not use outside knowledge.
 2. If the context does not contain enough information to answer, say exactly:
-   "I don't have enough information in the book to answer this confidently."
-3. Be concise and direct. Quote or paraphrase the book where helpful.
-4. After your answer, list the source page numbers you used in the format:
-   Sources: [page X, page Y]
+   "I don't have enough information in the available books to answer this confidently."
+3. Be concise and direct. Quote or paraphrase the source where helpful.
+4. After your answer, list the source documents and page numbers you used in the
+   format: Sources: [book_name, page X], [other_book, page Y]
 """
 
 USER_PROMPT_TEMPLATE = """\
-Context from the book:
+Context from the library:
 ---
 {context}
 ---
@@ -24,10 +24,12 @@ Answer:"""
 
 
 def format_context(chunks: list[dict]) -> str:
-    """Format retrieved chunks into a numbered context block."""
+    """Format retrieved chunks into a numbered context block including source filenames."""
     parts = []
     for i, c in enumerate(chunks, start=1):
-        parts.append(f"[Source {i} — page {c['page_num']}]\n{c['text']}")
+        parts.append(
+            f"[Source {i} — {c['source']}, page {c['page_num']}]\n{c['text']}"
+        )
     return "\n\n".join(parts)
 
 
