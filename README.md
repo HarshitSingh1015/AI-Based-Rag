@@ -98,15 +98,37 @@ measured against these numbers. The "Cost" column in the Langfuse dashboard
 will show $0 because Langfuse doesn't ship pricing for local Ollama models;
 that's expected.
 
+## Web UI (Day 5)
+
+A clean Streamlit interface for browser-based interaction.
+
+![App screenshot](docs/app_screenshot.png)
+
+**Run locally:**
+
+```bash
+uv run streamlit run app.py
+```
+
+Then open http://localhost:8501 in your browser.
+
+Features:
+- Chat-style Q&A with persistent history within a session
+- Adjustable `top_k` retrieval slider in the sidebar
+- Expandable source panel showing each retrieved chunk + page number + cosine distance
+- Per-query latency metrics (retrieve / generate / total)
+- Every query is still traced in Langfuse — open the dashboard alongside
+
 ## Progress log
 - [x] **Day 1**: Project setup, Ollama installed, models pulled, folder structure, deps installed
 - [x] **Phase 1**: Hello World RAG (basic vector search + LLM)
 - [x] **Phase 2**: Observability (Langfuse tracing, latency, token usage)
+- [x] **Day 5**: Streamlit web UI ← demoable!
 - [ ] **Phase 3**: Evaluation foundation (golden set + RAGAS)
 - [ ] **Phase 4**: Hybrid retrieval + reranking
 - [ ] **Phase 5**: Citation enforcement
 - [ ] **Phase 6**: CI regression gating (GitHub Actions)
-- [ ] **Phase 7**: Polish + UI + deploy
+- [ ] **Phase 7**: Deploy to Hugging Face Spaces
 
 ## Setup verification (Day 1)
 - [x] Ollama installed: `ollama --version`
@@ -151,3 +173,13 @@ that's expected.
 - Captured baseline latency + token-usage metrics in README
 - Saved trace screenshot to docs/langfuse_trace.png (user-captured)
 - Goal for Day 5: build Streamlit UI for browser-based interaction
+
+### Day 5 — 2026-06-02
+- Built Streamlit web UI (app.py) with chat-style Q&A interface
+- Sidebar with stack info, top_k slider (1-10), indexed-chunk count, clear-history button
+- Expandable source panel for each answer (page numbers + cosine distance)
+- Per-query latency tiles (retrieve / generate / total)
+- Verified Langfuse traces still flow correctly from UI-initiated queries — no new instrumentation needed
+- Saved demo screenshot to docs/app_screenshot.png
+- First demoable version of the app
+- Goal for Day 6: start Phase 3 (evaluation foundation) — build golden Q&A set + RAGAS scoring
