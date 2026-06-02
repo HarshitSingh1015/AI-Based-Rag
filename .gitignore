@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+
+# Environment
+.env
+.env.local
+
+# Data (raw documents shouldn't be committed)
+data/raw/*.pdf
+data/raw/*.epub
+data/raw/*.txt
+data/processed/
+
+# Eval outputs
+evals/results/*.json
+
+# IDE
+.vscode/
+.idea/
+.cursor/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# ChromaDB local files
+chroma_db/
+*.sqlite3
