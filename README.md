@@ -189,69 +189,90 @@ CPU.
 Latest results: `evals/results/eval_20260603_122556.json` (gitignored;
 re-run anytime with `uv run python -m src.eval.run`).
 
-## Phase 4 Part 1 — Hybrid Retrieval Results (Day 7)
+## Phase 4 — Retrieval Improvements
 
-Added BM25 keyword search alongside vector retrieval, fused via Reciprocal
-Rank Fusion (k=60). The system now combines semantic similarity (vector)
-with exact-keyword matching (BM25) — capturing names, IDs, and rare terms
-that pure embedding-based retrieval misses.
+Three retrieval strategies, same 10-question golden set, measured against
+the Day 6 baseline.
 
-### Before vs After (10-question golden set)
+| Stage | Retrieval recall@5 | Faithfulness | Answer relevancy | Context precision | Avg retrieve (s) | Avg generate (s) |
+|-------|---------------------|--------------|------------------|-------------------|------------------|------------------|
+| **Day 6 baseline** (vector only) | 70.0% | 0.719 | 0.649 | 0.580 | 0.15 | 76.4 |
+| **Day 7 hybrid** (BM25 + vector + RRF) | 100.0% | 0.850 | 0.820 | 0.719 | 0.17 | 105.8 |
+| **Day 8 + rerank** (cross-encoder bge-reranker-v2-m3) | **100.0%** | **0.842** | **0.832** | **0.895** | **11.78** | **101.4** |
 
-| Metric | Baseline (vector only) | Hybrid (BM25 + vector) | Delta |
-|--------|------------------------|------------------------|-------|
-| Retrieval recall@5 | 70.0% | **100.0%** | **+30.0%** |
-| RAGAS faithfulness | 0.719 | **0.850** | **+0.131** |
-| RAGAS answer relevancy | 0.649 | **0.820** | **+0.171** |
-| RAGAS context precision | 0.580 | **0.719** | **+0.139** |
-| Avg retrieve latency | 0.15s | 0.17s | +0.02s |
-| Avg generate latency | 76.4s | 105.8s | +29.4s |
+**End-to-end improvement (baseline → Day 8):**
+- Retrieval recall@5: 70.0% → 100.0% (**+30.0%**)
+- Context precision: 0.580 → 0.895 (**+0.315**)
+- Faithfulness: 0.719 → 0.842 (**+0.123**)
+- Answer relevancy: 0.649 → 0.832 (**+0.183**)
+- Latency cost: +11.6 seconds retrieve (cross-encoder on CPU)
+
+**Incremental gain from reranking alone (Day 7 → Day 8):**
+- Recall@5: 100% → 100% (already saturated by hybrid)
+- Context precision: 0.719 → 0.895 (**+0.176**) ← the reranker's true contribution
+- Answer relevancy: 0.820 → 0.832 (+0.013)
+- Faithfulness: 0.850 → 0.842 (-0.008, within RAGAS noise)
+- Generate latency: 105.8s → 101.4s (-4.4s, noise — the LLM sometimes responds faster on better-curated context)
 
 ### Per-question retrieval hits
 
-| Question ID | Baseline | Hybrid | Change |
-|-------------|----------|--------|--------|
-| rdp_01 | HIT | HIT | stable |
-| rdp_02 | HIT | HIT | stable |
-| rdp_03 | HIT | HIT | stable |
-| rdp_04 | HIT | HIT | stable |
-| rdp_05 | HIT | HIT | stable |
-| rdp_06 | HIT | HIT | stable |
-| rdp_07 | HIT | HIT | stable |
-| resume_01 | MISS | HIT | **IMPROVED** |
-| resume_02 | MISS | HIT | **IMPROVED** |
-| resume_03 | MISS | HIT | **IMPROVED** |
+| Question ID | Baseline | Hybrid | + Rerank |
+|-------------|----------|--------|----------|
+| rdp_01      | HIT  | HIT  | HIT  |
+| rdp_02      | HIT  | HIT  | HIT  |
+| rdp_03      | HIT  | HIT  | HIT  |
+| rdp_04      | HIT  | HIT  | HIT  |
+| rdp_05      | HIT  | HIT  | HIT  |
+| rdp_06      | HIT  | HIT  | HIT  |
+| rdp_07      | HIT  | HIT  | HIT  |
+| resume_01   | MISS | HIT  | HIT  |
+| resume_02   | MISS | HIT  | HIT  |
+| resume_03   | MISS | HIT  | HIT  |
 
-**Net: 3 improvement(s), 0 regression(s).**
-
-**Key win**: All 3 resume questions went from MISS to HIT — the previously
-unreachable corpus is now fully retrievable. The Phase 4 motivation
-documented on Day 6 has been quantitatively addressed.
-
-**Why generate latency went up (+29s)**: Hybrid pulls a more diverse mix of
-chunks across both sources, leading to longer total context fed to the LLM.
-The cross-encoder reranker (Day 8) is the next planned mitigation — it
-will trim a wider candidate pool down to a more on-topic top-K.
+### Why each stage helps
+- **Vector only**: good semantic similarity, but misses exact-keyword matches
+  (proper names, IDs, technical terms) and struggles with corpus imbalance —
+  the resume's 9 chunks were drowned out by the book's 1057.
+- **+ BM25 (Day 7)**: keyword matching adds rare-term sensitivity ("Harshit",
+  "22UEC125"), bringing previously-unreachable chunks into the candidate
+  pool. Recall@5 saturates at 100%.
+- **+ Cross-encoder rerank (Day 8)**: hybrid already had 100% hit-rate, but
+  chunk *ordering* inside top-5 was still mediocre. The reranker re-scores 20
+  candidates with a model that considers query + document jointly,
+  putting truly relevant chunks at the top — context_precision jumps
+  +0.176 even though recall doesn't change.
 
 ### Architecture today
 
 ```
-HybridRetriever
-├── VectorRetriever (semantic similarity, nomic-embed-text)
-└── BM25Retriever  (keyword exact-match, rank-bm25)
-    fetch_k=20 each, fused via RRF (k=60), top_k=5 returned
+RerankedRetriever
+├── HybridRetriever (fetch_k=20)
+│   ├── VectorRetriever (semantic similarity, nomic-embed-text)
+│   └── BM25Retriever  (keyword exact-match, rank-bm25)
+│       fused via Reciprocal Rank Fusion (k=60)
+└── CrossEncoderReranker (BAAI/bge-reranker-v2-m3, ~570MB local)
+    re-scores 20 candidates → returns top 5
 ```
 
 The BM25 tokenizer uses `re.findall(r"\w+", text.lower())` rather than a
 plain whitespace split, so PDF-extraction artifacts (e.g., `Roll No.:
 22UEC125/envel⌢pe...`) still surface the embedded alphanumeric ID.
 
-Generate this comparison anytime with:
+### Headline behavior change
+
+The query *"What programming languages does Harshit know?"* on Day 7 (hybrid)
+returned *"I don't have enough information"* because, despite both resume
+chunks being in the candidate pool, they were drowned out by 18 book chunks
+in the top-5 prompt. On Day 8 (hybrid + rerank), the same query correctly
+answers with `C++, JavaScript, TypeScript, HTML/CSS` and cites
+`harshit_resume.pdf`.
+
+Generate any pairwise comparison with:
 ```bash
-uv run python -m src.eval.compare
+uv run python -m src.eval.compare <file_a> <file_b>
 ```
 
-Latest results: `evals/results/eval_20260603_154649.json`
+Latest results: `evals/results/eval_20260603_190356.json`
 
 ## Progress log
 - [x] **Day 1**: Project setup, Ollama installed, models pulled, folder structure, deps installed
@@ -260,7 +281,7 @@ Latest results: `evals/results/eval_20260603_154649.json`
 - [x] **Day 5**: Streamlit web UI ← demoable!
 - [x] **Day 5.5**: Multi-document support via CLI
 - [x] **Phase 3**: Evaluation foundation (golden set + RAGAS) — 10 questions, baseline captured
-- [~] **Phase 4**: Hybrid retrieval + reranking (hybrid done Day 7, reranking pending)
+- [x] **Phase 4**: Hybrid retrieval + reranking (both done)
 - [ ] **Phase 5**: Citation enforcement
 - [ ] **Phase 6**: CI regression gating (GitHub Actions)
 - [ ] **Phase 7**: Deploy to Hugging Face Spaces
@@ -347,3 +368,15 @@ Latest results: `evals/results/eval_20260603_154649.json`
 - RAGAS metrics all improved: faithfulness +0.131, answer_relevancy +0.171, context_precision +0.139
 - Generate latency went up ~29s due to more diverse / longer combined context — Day 8 reranker is the planned mitigation
 - Goal for Day 8: add cross-encoder reranking (`bge-reranker-v2-m3`) on top of hybrid to trim top-20 → top-5 by true relevance, expect biggest gain on context_precision and a generate-latency win
+
+### Day 8 — 2026-06-03
+- Added cross-encoder reranker (`BAAI/bge-reranker-v2-m3`, ~570MB) via `sentence-transformers` (which also brought in torch CPU + transformers, ~1.5GB on disk total)
+- Built `CrossEncoderReranker` at `src/rerank/cross_encoder.py` — re-scores `(query, chunk)` pairs jointly, attaches `rerank_score` to each chunk, fully Langfuse-traced
+- Built `RerankedRetriever` at `src/retrieval/reranked_retriever.py` — composes `HybridRetriever(fetch_k=20)` → cross-encoder rerank → top-5, drop-in replacement for the previous retrievers
+- Wired all 4 consumers (`rag.py`, `chat.py`, `app.py`, `src/eval/run.py`) to `RerankedRetriever`; eval config now records `"retrieval_strategy": "hybrid_rrf_plus_cross_encoder_rerank"` and the reranker model name
+- Smoke test confirmed the headline behavior: on *"What programming languages does Harshit know?"* the reranker lifted both resume chunks (rerank_score 0.264 / 0.064) above 18 book candidates (all 0.000), and the LLM correctly answered with C++/JS/TS/HTML/CSS — fixing the Day 7 *"I don't have enough information"* failure
+- Third full eval run: **recall@5 = 100%**, faithfulness 0.842, answer_relevancy 0.832, **context_precision 0.895** (the headline jump)
+- **End-to-end win (baseline → Day 8)**: recall +30.0%, context_precision +0.315, faithfulness +0.123, answer_relevancy +0.183
+- **Pure rerank contribution (hybrid → Day 8)**: context_precision +0.176 even though recall was already saturated at 100% — the rerank improves chunk *ordering*, not just hit-rate. Faithfulness drifted -0.008, well within RAGAS noise
+- Retrieve latency went from 0.17s → 11.78s on CPU (the trade-off for joint-encoding 20 candidates); generate latency actually dropped slightly (-4.4s) on more focused contexts
+- Goal for Day 9: Phase 5 — citation enforcement (LLM must cite valid sources or refuse to answer)

@@ -4,7 +4,7 @@ Each query is traced in Langfuse.
 import atexit
 
 from src.observability.tracer import init as init_langfuse, flush as flush_langfuse
-from src.retrieval.hybrid_retriever import HybridRetriever
+from src.retrieval.reranked_retriever import RerankedRetriever
 from rag import answer
 
 init_langfuse()
@@ -17,7 +17,7 @@ def main() -> None:
     print("Type your question and press Enter.")
     print("Type 'exit', 'quit', or 'q' to leave.\n")
 
-    retriever = HybridRetriever()
+    retriever = RerankedRetriever()
     print(f"Collection ready: {retriever.collection.count()} chunks\n")
 
     while True:
