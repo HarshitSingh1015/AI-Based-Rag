@@ -140,13 +140,62 @@ and page number.
 
 **Note**: Embedding takes ~5-30 minutes per book on CPU. Be patient.
 
+## Baseline Evaluation (Day 6 — Phase 3)
+
+10-question hand-curated golden set covering both books in the library
+(7 Rich Dad Poor Dad + 3 resume questions). All metrics computed using
+local Ollama as both the system LLM AND the LLM-as-judge.
+
+| Metric | Score | Notes |
+|--------|-------|-------|
+| Retrieval recall@5 | **70.0%** (7/10) | Did at least one chunk come from the expected source? |
+| RAGAS faithfulness | 0.719 | Is the answer grounded in the retrieved context? |
+| RAGAS answer relevancy | 0.649 | Does the answer address the question? |
+| RAGAS context precision | 0.580 | Are the retrieved chunks relevant to the question? |
+| Avg retrieve latency | 0.15s | Vector search only — fast |
+| Avg generate latency | 76.4s | CPU inference is the bottleneck |
+
+### Known Baseline Gap
+
+Resume-related questions (`resume_01`, `resume_02`, `resume_03`) currently
+retrieve **0 chunks from the resume**, falling back to Rich Dad Poor Dad
+content. Per-question breakdown:
+
+| ID | Expected source | Retrieved from | Hit? |
+|----|----------------|----------------|------|
+| rdp_01 … rdp_07 | rich_dad_poor_dad.pdf | rich_dad_poor_dad.pdf | ✅ 7/7 |
+| resume_01 | harshit_resume.pdf | rich_dad_poor_dad.pdf | ❌ |
+| resume_02 | harshit_resume.pdf | rich_dad_poor_dad.pdf | ❌ |
+| resume_03 | harshit_resume.pdf | rich_dad_poor_dad.pdf | ❌ |
+
+This is a known limitation of pure vector retrieval when one document
+heavily dominates the corpus (1057 book chunks vs 9 resume chunks — 99.2%
+of the index is one source). For "soft" semantic queries like
+*"educational background"* or *"programming languages,"* the book's
+broader vocabulary outweighs the resume's much smaller surface area.
+
+**Phase 4 (hybrid retrieval with BM25)** is expected to close this gap.
+BM25 rewards exact term overlap, so a query like *"What programming
+languages does Harshit Singh know?"* will heavily favor the resume chunks
+that contain the literal token "Harshit." The current numbers are the
+deliberate baseline we will measure against.
+
+Implementation note: RAGAS 0.2.x defaults to a 180s per-job timeout and
+high parallelism, both of which break with a slow local LLM judge. The
+runner uses `RunConfig(timeout=600, max_workers=1, max_retries=2)` to
+serialize judge calls — this is why the full eval takes ~2 hours on
+CPU.
+
+Latest results: `evals/results/eval_20260603_122556.json` (gitignored;
+re-run anytime with `uv run python -m src.eval.run`).
+
 ## Progress log
 - [x] **Day 1**: Project setup, Ollama installed, models pulled, folder structure, deps installed
 - [x] **Phase 1**: Hello World RAG (basic vector search + LLM)
 - [x] **Phase 2**: Observability (Langfuse tracing, latency, token usage)
 - [x] **Day 5**: Streamlit web UI ← demoable!
 - [x] **Day 5.5**: Multi-document support via CLI
-- [ ] **Phase 3**: Evaluation foundation (golden set + RAGAS)
+- [x] **Phase 3**: Evaluation foundation (golden set + RAGAS) — 10 questions, baseline captured
 - [ ] **Phase 4**: Hybrid retrieval + reranking
 - [ ] **Phase 5**: Citation enforcement
 - [ ] **Phase 6**: CI regression gating (GitHub Actions)
@@ -213,3 +262,13 @@ and page number.
 - Verified idempotency: re-running ingest on `rich_dad_poor_dad.pdf` left collection unchanged at 1057 chunks (`add_chunks` correctly reported "All chunks already in collection — nothing to add.")
 - Multi-doc verification with a second PDF was skipped today; will validate manually when a second book is ingested
 - Goal for Day 6: build the eval foundation (golden set + RAGAS)
+
+### Day 6 — 2026-06-03
+- Ingested second PDF (`harshit_resume.pdf`, 9 chunks) before starting — library is now 1066 chunks across 2 sources
+- Built hand-curated golden set (10 Q&A pairs: 7 book + 3 resume) at `evals/golden_set.jsonl`
+- Installed RAGAS + langchain-ollama for local LLM-as-judge evaluation (pinned to `ragas>=0.2.0,<0.3.0` after the 0.4.x line broke against newer `langchain-community`)
+- Created `src/eval/run.py` — computes retrieval recall@k + RAGAS faithfulness / answer_relevancy / context_precision
+- First attempt produced all-NaN RAGAS scores due to RAGAS 0.2.x's default 180s per-job timeout (llama3.1:8b on CPU is too slow); fixed by passing `RunConfig(timeout=600, max_workers=1, max_retries=2)`. Total eval runtime: ~2h 17m on CPU
+- **Baseline captured**: recall@5 70%, faithfulness 0.719, answer_relevancy 0.649, context_precision 0.580
+- Confirmed quantitatively: resume retrieval recall is **0/3 (0%)** — the deliberate Phase 4 motivation
+- Goal for Day 7: start Phase 4 by adding BM25 + hybrid retrieval, re-run eval, measure improvement (resume recall should jump from 0% → ~100%)
