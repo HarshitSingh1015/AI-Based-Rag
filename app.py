@@ -5,7 +5,7 @@ from collections import Counter
 import streamlit as st
 
 from src.observability.tracer import init as init_langfuse, flush as flush_langfuse
-from src.retrieval.retriever import Retriever
+from src.retrieval.hybrid_retriever import HybridRetriever
 from rag import answer
 
 st.set_page_config(
@@ -17,14 +17,14 @@ st.set_page_config(
 
 
 @st.cache_resource
-def setup() -> Retriever:
-    """One-time setup: Langfuse client + Retriever (cached across reruns)."""
+def setup() -> HybridRetriever:
+    """One-time setup: Langfuse client + HybridRetriever (cached across reruns)."""
     init_langfuse()
     atexit.register(flush_langfuse)
-    return Retriever()
+    return HybridRetriever()
 
 
-def get_library_stats(retriever: Retriever) -> dict[str, int]:
+def get_library_stats(retriever: HybridRetriever) -> dict[str, int]:
     """Count chunks per source filename in the collection."""
     items = retriever.collection.get(include=["metadatas"])
     sources = [m["source"] for m in items["metadatas"]]
@@ -69,6 +69,7 @@ across your personal book library.
 **Stack**
 - LLM: `llama3.1:8b` (Ollama)
 - Embeddings: `nomic-embed-text` (Ollama)
+- Retrieval: BM25 + Vector (RRF fusion)
 - Vector DB: ChromaDB
 - Observability: Langfuse
 - UI: Streamlit

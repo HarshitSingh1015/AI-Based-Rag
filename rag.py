@@ -2,12 +2,15 @@
 Each call is fully traced in Langfuse.
 """
 import atexit
+import sys
 import time
+
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from langfuse.decorators import observe, langfuse_context
 
 from src.observability.tracer import init as init_langfuse, flush as flush_langfuse
-from src.retrieval.retriever import Retriever
+from src.retrieval.hybrid_retriever import HybridRetriever
 from src.generate.prompt import build_messages
 from src.generate.llm import generate
 
@@ -25,7 +28,7 @@ TOP_K = 5
 
 
 @observe(name="rag_query")
-def answer(question: str, retriever: Retriever, top_k: int = TOP_K, verbose: bool = True) -> dict:
+def answer(question: str, retriever: HybridRetriever, top_k: int = TOP_K, verbose: bool = True) -> dict:
     """Run a full RAG cycle and return the answer + metadata."""
     t0 = time.time()
     chunks = retriever.retrieve(question, top_k=top_k)
@@ -72,7 +75,7 @@ def answer(question: str, retriever: Retriever, top_k: int = TOP_K, verbose: boo
 
 def main() -> None:
     print("=== END-TO-END RAG TEST (with Langfuse tracing) ===")
-    retriever = Retriever()
+    retriever = HybridRetriever()
     print(f"Collection size: {retriever.collection.count()}\n")
 
     results = []

@@ -19,7 +19,7 @@ from src.observability.tracer import flush as flush_langfuse
 from src.observability.tracer import init as init_langfuse
 from src.generate.llm import generate
 from src.generate.prompt import build_messages
-from src.retrieval.retriever import Retriever
+from src.retrieval.hybrid_retriever import HybridRetriever
 
 GOLDEN_SET_PATH = Path("evals/golden_set.jsonl")
 RESULTS_DIR = Path("evals/results")
@@ -38,7 +38,7 @@ def load_golden_set(path: Path) -> list[dict]:
     return items
 
 
-def run_system_on_item(item: dict, retriever: Retriever) -> dict:
+def run_system_on_item(item: dict, retriever: HybridRetriever) -> dict:
     """Run our RAG on a single question; capture all the data RAGAS needs."""
     t0 = time.time()
     chunks = retriever.retrieve(item["question"], top_k=TOP_K)
@@ -142,7 +142,7 @@ def main() -> None:
     print(f"\nLoaded {len(golden)} questions from {GOLDEN_SET_PATH}")
 
     print("\n[1/3] Running RAG system on each question...")
-    retriever = Retriever()
+    retriever = HybridRetriever()
     rows = []
     for i, item in enumerate(golden, start=1):
         print(f"  [{i}/{len(golden)}] {item['id']}: {item['question'][:60]}...")
@@ -171,6 +171,7 @@ def main() -> None:
         "timestamp": timestamp,
         "config": {
             "top_k": TOP_K,
+            "retrieval_strategy": "hybrid_bm25_vector_rrf",
             "llm_model": "llama3.1:8b",
             "embed_model": "nomic-embed-text",
             "judge_llm": JUDGE_LLM,

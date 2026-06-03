@@ -189,6 +189,70 @@ CPU.
 Latest results: `evals/results/eval_20260603_122556.json` (gitignored;
 re-run anytime with `uv run python -m src.eval.run`).
 
+## Phase 4 Part 1 — Hybrid Retrieval Results (Day 7)
+
+Added BM25 keyword search alongside vector retrieval, fused via Reciprocal
+Rank Fusion (k=60). The system now combines semantic similarity (vector)
+with exact-keyword matching (BM25) — capturing names, IDs, and rare terms
+that pure embedding-based retrieval misses.
+
+### Before vs After (10-question golden set)
+
+| Metric | Baseline (vector only) | Hybrid (BM25 + vector) | Delta |
+|--------|------------------------|------------------------|-------|
+| Retrieval recall@5 | 70.0% | **100.0%** | **+30.0%** |
+| RAGAS faithfulness | 0.719 | **0.850** | **+0.131** |
+| RAGAS answer relevancy | 0.649 | **0.820** | **+0.171** |
+| RAGAS context precision | 0.580 | **0.719** | **+0.139** |
+| Avg retrieve latency | 0.15s | 0.17s | +0.02s |
+| Avg generate latency | 76.4s | 105.8s | +29.4s |
+
+### Per-question retrieval hits
+
+| Question ID | Baseline | Hybrid | Change |
+|-------------|----------|--------|--------|
+| rdp_01 | HIT | HIT | stable |
+| rdp_02 | HIT | HIT | stable |
+| rdp_03 | HIT | HIT | stable |
+| rdp_04 | HIT | HIT | stable |
+| rdp_05 | HIT | HIT | stable |
+| rdp_06 | HIT | HIT | stable |
+| rdp_07 | HIT | HIT | stable |
+| resume_01 | MISS | HIT | **IMPROVED** |
+| resume_02 | MISS | HIT | **IMPROVED** |
+| resume_03 | MISS | HIT | **IMPROVED** |
+
+**Net: 3 improvement(s), 0 regression(s).**
+
+**Key win**: All 3 resume questions went from MISS to HIT — the previously
+unreachable corpus is now fully retrievable. The Phase 4 motivation
+documented on Day 6 has been quantitatively addressed.
+
+**Why generate latency went up (+29s)**: Hybrid pulls a more diverse mix of
+chunks across both sources, leading to longer total context fed to the LLM.
+The cross-encoder reranker (Day 8) is the next planned mitigation — it
+will trim a wider candidate pool down to a more on-topic top-K.
+
+### Architecture today
+
+```
+HybridRetriever
+├── VectorRetriever (semantic similarity, nomic-embed-text)
+└── BM25Retriever  (keyword exact-match, rank-bm25)
+    fetch_k=20 each, fused via RRF (k=60), top_k=5 returned
+```
+
+The BM25 tokenizer uses `re.findall(r"\w+", text.lower())` rather than a
+plain whitespace split, so PDF-extraction artifacts (e.g., `Roll No.:
+22UEC125/envel⌢pe...`) still surface the embedded alphanumeric ID.
+
+Generate this comparison anytime with:
+```bash
+uv run python -m src.eval.compare
+```
+
+Latest results: `evals/results/eval_20260603_154649.json`
+
 ## Progress log
 - [x] **Day 1**: Project setup, Ollama installed, models pulled, folder structure, deps installed
 - [x] **Phase 1**: Hello World RAG (basic vector search + LLM)
@@ -196,7 +260,7 @@ re-run anytime with `uv run python -m src.eval.run`).
 - [x] **Day 5**: Streamlit web UI ← demoable!
 - [x] **Day 5.5**: Multi-document support via CLI
 - [x] **Phase 3**: Evaluation foundation (golden set + RAGAS) — 10 questions, baseline captured
-- [ ] **Phase 4**: Hybrid retrieval + reranking
+- [~] **Phase 4**: Hybrid retrieval + reranking (hybrid done Day 7, reranking pending)
 - [ ] **Phase 5**: Citation enforcement
 - [ ] **Phase 6**: CI regression gating (GitHub Actions)
 - [ ] **Phase 7**: Deploy to Hugging Face Spaces
@@ -272,3 +336,14 @@ re-run anytime with `uv run python -m src.eval.run`).
 - **Baseline captured**: recall@5 70%, faithfulness 0.719, answer_relevancy 0.649, context_precision 0.580
 - Confirmed quantitatively: resume retrieval recall is **0/3 (0%)** — the deliberate Phase 4 motivation
 - Goal for Day 7: start Phase 4 by adding BM25 + hybrid retrieval, re-run eval, measure improvement (resume recall should jump from 0% → ~100%)
+
+### Day 7 — 2026-06-03
+- Added BM25 keyword retriever (`rank-bm25`) at `src/retrieval/bm25_retriever.py` — uses `re.findall(r"\w+", ...)` instead of a bare `.split()` to isolate alphanumeric IDs glued to punctuation by PDF extraction
+- Added `HybridRetriever` at `src/retrieval/hybrid_retriever.py` — combines BM25 + vector via Reciprocal Rank Fusion (k=60, fetch_k=20 per retriever)
+- Wired all consumers (`rag.py`, `chat.py`, `app.py`, `src/eval/run.py`) to `HybridRetriever`; added `"retrieval_strategy": "hybrid_bm25_vector_rrf"` to saved eval config
+- Patched `rag.py` to reconfigure stdout to UTF-8 — verbose mode now handles Unicode chars (e.g. ♂) that resume chunks introduce
+- Built `src/eval/compare.py` — side-by-side before/after comparison of two eval result files
+- Re-ran full eval with hybrid: **recall@5 jumped from 70% → 100% (+30%)**, all 3 resume questions IMPROVED from MISS to HIT, **0 regressions**
+- RAGAS metrics all improved: faithfulness +0.131, answer_relevancy +0.171, context_precision +0.139
+- Generate latency went up ~29s due to more diverse / longer combined context — Day 8 reranker is the planned mitigation
+- Goal for Day 8: add cross-encoder reranking (`bge-reranker-v2-m3`) on top of hybrid to trim top-20 → top-5 by true relevance, expect biggest gain on context_precision and a generate-latency win
