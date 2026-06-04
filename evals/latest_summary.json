@@ -14,7 +14,7 @@
     "num_questions": 10
   },
   "metrics": {
-    "retrieval_recall_at_k": 1.0,
+    "retrieval_recall_at_k": 0.5,
     "ragas_faithfulness": 0.8333333333333333,
     "ragas_answer_relevancy": 0.8115357091845243,
     "ragas_context_precision": 0.8949999999627917,
