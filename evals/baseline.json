@@ -1,0 +1,26 @@
+{
+  "_note": "Frozen baseline for CI regression gating. Update only after intentional, measured improvement.",
+  "snapshot_date": "2026-06-04T13:57:07.667083",
+  "source_result_file": "eval_20260604_133832.json",
+  "config": {
+    "top_k": 5,
+    "retrieval_strategy": "hybrid_rrf_plus_rerank_plus_citation_enforcement",
+    "reranker_model": "BAAI/bge-reranker-v2-m3",
+    "citation_enforcement": true,
+    "llm_model": "llama3.1:8b",
+    "embed_model": "nomic-embed-text",
+    "judge_llm": "llama3.1:8b",
+    "judge_embed": "nomic-embed-text",
+    "num_questions": 10
+  },
+  "metrics": {
+    "retrieval_recall_at_k": 1.0,
+    "ragas_faithfulness": 0.8333333333333333,
+    "ragas_answer_relevancy": 0.8115357091845243,
+    "ragas_context_precision": 0.8949999999627917,
+    "citation_valid_rate": 1.0,
+    "citation_hallucinated_rate": 0.0,
+    "avg_latency_retrieve_s": 13.409974455833435,
+    "avg_latency_generate_s": 125.37245380878448
+  }
+}

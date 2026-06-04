@@ -220,6 +220,27 @@ def main() -> None:
         json.dump(output, f, indent=2, ensure_ascii=False, default=str)
 
     print(f"\nResults saved to {out_path}")
+
+    summary_path = Path("evals") / "latest_summary.json"
+    summary = {
+        "snapshot_date": timestamp,
+        "source_result_file": str(out_path),
+        "config": output["config"],
+        "metrics": {
+            "retrieval_recall_at_k": recall["recall_at_k"],
+            "ragas_faithfulness": ragas_results["mean_scores"].get("faithfulness"),
+            "ragas_answer_relevancy": ragas_results["mean_scores"].get("answer_relevancy"),
+            "ragas_context_precision": ragas_results["mean_scores"].get("context_precision"),
+            "citation_valid_rate": citation_metrics.get("valid_rate"),
+            "citation_hallucinated_rate": citation_metrics.get("hallucinated_citation_rate"),
+            "avg_latency_retrieve_s": output["avg_latency"]["retrieve_s"],
+            "avg_latency_generate_s": output["avg_latency"]["generate_s"],
+        },
+    }
+    with open(summary_path, "w", encoding="utf-8") as f:
+        json.dump(summary, f, indent=2, ensure_ascii=False, default=str)
+    print(f"Summary written to {summary_path} (committed for CI baseline gate)")
+
     flush_langfuse()
 
 

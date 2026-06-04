@@ -343,6 +343,48 @@ answer()
 
 Latest results: `evals/results/eval_20260604_133832.json`
 
+## Phase 6 — CI Regression Gating (Day 10)
+
+[![CI](https://github.com/HarshitSingh1015/AI-Based-Rag/actions/workflows/ci.yml/badge.svg)](https://github.com/HarshitSingh1015/AI-Based-Rag/actions/workflows/ci.yml)
+
+Every pull request runs through GitHub Actions:
+1. **Unit tests** — pytest on the deterministic components (citation
+   validator, chunker, RRF math).
+2. **Lint** — ruff (non-blocking warnings).
+3. **Baseline gate** — `src/eval/check_baseline.py` compares the
+   committed `evals/latest_summary.json` against `evals/baseline.json`
+   and **fails the build** if any metric regresses past its threshold.
+
+### Gated metrics and thresholds
+
+| Metric | Allowed change |
+|--------|----------------|
+| Retrieval recall@5 | may drop at most 5pp |
+| RAGAS faithfulness | may drop at most 0.05 |
+| RAGAS answer relevancy | may drop at most 0.05 |
+| RAGAS context precision | may drop at most 0.05 |
+| Citation valid rate | may drop at most 5pp |
+| Hallucinated citation rate | may rise at most 5pp |
+| Avg retrieve latency | may grow by at most 2.0s |
+| Avg generate latency | may grow by at most 30s |
+
+A change that exceeds ANY threshold blocks the PR until either:
+- The regression is fixed, OR
+- The maintainer intentionally updates the baseline.
+
+See `CONTRIBUTING.md` for the full workflow.
+
+### Two-tier strategy
+
+| Tier | What runs | When | Time |
+|------|-----------|------|------|
+| **Fast** (GitHub Actions) | pytest + ruff + baseline gate | Every PR | ~1-3 min |
+| **Slow** (manual, local) | Full RAGAS eval | Before major RAG changes | ~90-180 min |
+
+The slow tier writes `evals/latest_summary.json`; the fast tier reads
+it. This keeps PR feedback cycles short while still protecting the
+RAG-quality metrics.
+
 ## Progress log
 - [x] **Day 1**: Project setup, Ollama installed, models pulled, folder structure, deps installed
 - [x] **Phase 1**: Hello World RAG (basic vector search + LLM)
@@ -352,7 +394,8 @@ Latest results: `evals/results/eval_20260604_133832.json`
 - [x] **Phase 3**: Evaluation foundation (golden set + RAGAS) — 10 questions, baseline captured
 - [x] **Phase 4**: Hybrid retrieval + reranking (both done)
 - [x] **Phase 5**: Citation enforcement (parse, validate, retry, refuse)
-- [ ] **Phase 6**: CI regression gating (GitHub Actions)
+- [x] **Phase 6**: CI regression gating (pytest + baseline check on every PR)
+- [ ] **Day 13**: Multi-format support + browser upload UI
 - [ ] **Phase 7**: Deploy to Hugging Face Spaces
 
 ## Setup verification (Day 1)
