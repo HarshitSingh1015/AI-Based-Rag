@@ -152,19 +152,28 @@ set in `evals/golden_set.jsonl`.
 
 ---
 
-## Phase 6 — Polish & ship (in progress)
+## Phase 6 — Polish & ship
 
 ### Day 11 — Visual assets & README rewrite
-- Captured 6 polished screenshots in `docs/screenshots/` showing UI,
-  citation enforcement, refusal, Langfuse trace, CI passing, and CI
-  blocking a regression.
-- Added a mermaid architecture diagram (renders natively on GitHub).
-- Rewrote `README.md` with hero section, metrics table, quickstart,
-  and demo questions.
-- Moved the day-by-day journal into this `CHANGELOG.md` so the
-  README stays signal-dense.
-- Placeholder `docs/demo_link.md` for the 90-second screen recording
-  (to be done in Day 16).
+- Captured all 6 planned screenshots in `docs/screenshots/`:
+  * `01_main_ui.png` — full Streamlit hero (sidebar + answer + verified badge)
+  * `02_verified_answer.png` — close-up of the cited answer
+  * `03_refusal.png` — "What is the capital of France?" → 🛡️ refused
+  * `04_langfuse_trace.png` — full trace tree (rag_query → reranked_retrieve → hybrid → rerank → llm_generate) with the right-panel detail view for the `rerank` span
+  * `05_ci_passing.png` — GitHub Actions list showing all CI runs
+    (greens + the deliberate red regression demo)
+  * `06_ci_blocking.png` — drill-in of the failed `Eval Baseline Gate` job, showing the metrics table with `retrieval_recall_at_k` FAIL and the `REGRESSION: 1 metric(s) outside threshold` line
+- Added a mermaid architecture diagram (renders natively on GitHub —
+  no separate SVG file needed).
+- Rewrote `README.md` with hero image, CI badge, before/after metrics
+  table (real numbers from each eval result), quickstart, demo
+  questions, tech-stack table, and project structure tree.
+- Moved the day-by-day journal out of `README.md` and into this
+  `CHANGELOG.md` so the README stays signal-dense.
+- Added `docs/demo_link.md` as a placeholder for the 90-second screen
+  recording (to be done in Day 16 when the blog post goes out).
+- Committed and pushed; verified all screenshots and the mermaid
+  diagram render correctly on GitHub.
 
 ### Day 12+ (planned)
 - **Day 12**: Multi-format ingestion (TXT/MD/DOCX/code).
