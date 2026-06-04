@@ -12,6 +12,3 @@ When recorded, the video will cover:
 | 0:30 - 0:50 | Streamlit: ask "What is the capital of France?" → honest refusal |
 | 0:50 - 1:10 | Langfuse: open latest trace, show retrieval + generation spans + latency |
 | 1:10 - 1:30 | GitHub Actions: green CI pipeline + red blocked-PR demo |
-
-The video will be hosted on either YouTube (unlisted) or Loom; the
-link will replace this file's contents once recorded.
