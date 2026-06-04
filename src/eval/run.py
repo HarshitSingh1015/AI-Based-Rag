@@ -17,9 +17,8 @@ from ragas.run_config import RunConfig
 
 from src.observability.tracer import flush as flush_langfuse
 from src.observability.tracer import init as init_langfuse
-from src.generate.llm import generate
-from src.generate.prompt import build_messages
 from src.retrieval.reranked_retriever import RerankedRetriever
+from rag import answer
 
 GOLDEN_SET_PATH = Path("evals/golden_set.jsonl")
 RESULTS_DIR = Path("evals/results")
@@ -40,26 +39,44 @@ def load_golden_set(path: Path) -> list[dict]:
 
 def run_system_on_item(item: dict, retriever: RerankedRetriever) -> dict:
     """Run our RAG on a single question; capture all the data RAGAS needs."""
-    t0 = time.time()
-    chunks = retriever.retrieve(item["question"], top_k=TOP_K)
-    t_retrieve = time.time() - t0
-
-    messages = build_messages(item["question"], chunks)
-    t1 = time.time()
-    answer_text = generate(messages)
-    t_generate = time.time() - t1
-
+    result = answer(item["question"], retriever, top_k=TOP_K, verbose=False)
+    chunks = result["chunks"]
     return {
         "id": item["id"],
         "question": item["question"],
         "ground_truth": item.get("ground_truth", ""),
         "expected_sources": item.get("expected_sources", []),
-        "answer": answer_text,
+        "answer": result["answer"],
         "contexts": [c["text"] for c in chunks],
         "retrieved_sources": [c["source"] for c in chunks],
         "retrieved_pages": [c["page_num"] for c in chunks],
-        "latency_retrieve_s": t_retrieve,
-        "latency_generate_s": t_generate,
+        "latency_retrieve_s": result["latency_retrieve_s"],
+        "latency_generate_s": result["latency_generate_s"],
+        "citation_validation": result["citation_validation"],
+    }
+
+
+def compute_citation_metrics(rows: list[dict]) -> dict:
+    """Aggregate citation-enforcement metrics across all rows."""
+    n = len(rows)
+    if n == 0:
+        return {}
+
+    valid = sum(int(r.get("citation_validation", {}).get("is_valid", False)) for r in rows)
+    refusal = sum(int(r.get("citation_validation", {}).get("is_refusal", False)) for r in rows)
+    retry = sum(int(r.get("citation_validation", {}).get("retried", False)) for r in rows)
+    fallback = sum(int(r.get("citation_validation", {}).get("fallback_used", False)) for r in rows)
+    hallucinated = sum(
+        int(r.get("citation_validation", {}).get("num_invalid", 0) > 0)
+        for r in rows
+    )
+
+    return {
+        "valid_rate": valid / n,
+        "refusal_rate": refusal / n,
+        "retry_rate": retry / n,
+        "fallback_rate": fallback / n,
+        "hallucinated_citation_rate": hallucinated / n,
     }
 
 
@@ -156,6 +173,14 @@ def main() -> None:
     print(f"  Retrieval recall@{TOP_K}: {recall['recall_at_k']:.1%} "
           f"({recall['hits']}/{recall['total']})")
 
+    citation_metrics = compute_citation_metrics(rows)
+    print("\n[2.5/3] Citation enforcement metrics:")
+    print(f"  Valid rate:                    {citation_metrics['valid_rate']:.1%}")
+    print(f"  Refusal rate:                  {citation_metrics['refusal_rate']:.1%}")
+    print(f"  Retry rate:                    {citation_metrics['retry_rate']:.1%}")
+    print(f"  Fallback rate:                 {citation_metrics['fallback_rate']:.1%}")
+    print(f"  Hallucinated citation rate:    {citation_metrics['hallucinated_citation_rate']:.1%}")
+
     print("\n[3/3] Computing RAGAS LLM-as-judge metrics...")
     ragas_results = run_ragas(rows)
     print("\nRAGAS mean scores:")
@@ -171,8 +196,9 @@ def main() -> None:
         "timestamp": timestamp,
         "config": {
             "top_k": TOP_K,
-            "retrieval_strategy": "hybrid_rrf_plus_cross_encoder_rerank",
+            "retrieval_strategy": "hybrid_rrf_plus_rerank_plus_citation_enforcement",
             "reranker_model": "BAAI/bge-reranker-v2-m3",
+            "citation_enforcement": True,
             "llm_model": "llama3.1:8b",
             "embed_model": "nomic-embed-text",
             "judge_llm": JUDGE_LLM,
@@ -184,6 +210,7 @@ def main() -> None:
             "generate_s": sum(r["latency_generate_s"] for r in rows) / len(rows),
         },
         "retrieval_recall": recall,
+        "citation_metrics": citation_metrics,
         "ragas_mean_scores": ragas_results["mean_scores"],
         "ragas_per_item": ragas_results["per_item"],
         "system_outputs": rows,

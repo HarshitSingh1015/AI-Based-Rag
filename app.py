@@ -37,12 +37,32 @@ if "history" not in st.session_state:
     st.session_state.history = []
 
 
+def render_citation_badge(val: dict) -> None:
+    """Render a citation-status badge for an answer."""
+    if val.get("fallback_used"):
+        st.error(
+            "🛡️ Refused to answer — citations could not be verified "
+            "even after retry. The library may not contain enough info."
+        )
+    elif val.get("is_refusal"):
+        st.info("🛡️ Refused — insufficient information in the library.")
+    elif val.get("is_valid"):
+        label = f"✅ All {val.get('num_valid', 0)} citation(s) verified"
+        if val.get("retried"):
+            label += " (after retry)"
+        st.success(label)
+    else:
+        st.warning("⚠️ Could not verify citations — answer may be unreliable.")
+
+
 def render_entry(entry: dict) -> None:
     """Render a single Q&A entry."""
     with st.chat_message("user"):
         st.write(entry["question"])
     with st.chat_message("assistant"):
         st.markdown(entry["answer"])
+
+        render_citation_badge(entry.get("citation_validation", {}))
 
         with st.expander(f"📖 Sources ({len(entry['chunks'])} chunks)"):
             for c in entry["chunks"]:
@@ -142,6 +162,8 @@ if query:
             flush_langfuse()
 
         st.markdown(result["answer"])
+
+        render_citation_badge(result.get("citation_validation", {}))
 
         with st.expander(f"📖 Sources ({len(result['chunks'])} chunks)"):
             for c in result["chunks"]:

@@ -274,6 +274,75 @@ uv run python -m src.eval.compare <file_a> <file_b>
 
 Latest results: `evals/results/eval_20260603_190356.json`
 
+## Phase 5 — Citation Enforcement (Day 9)
+
+Every answer now either cites valid retrieved sources or honestly refuses.
+The system parses every `[filename.pdf, page N]` citation in the LLM's
+response, verifies each one against the actually-retrieved chunks, and:
+
+1. If all citations are valid: returns the answer.
+2. If any citation is hallucinated: regenerates ONCE with a stricter
+   reminder prompt.
+3. If still invalid: returns a safe "I don't have enough information"
+   refusal instead of risking hallucination.
+
+### Citation enforcement metrics (Day 9 vs Day 8)
+
+| Metric | Day 8 | Day 9 | Delta |
+|--------|-------|-------|-------|
+| Valid answer rate | N/A (unmeasured) | **100.0%** | new metric |
+| Honest refusal rate | N/A | 0.0% | new metric |
+| Retry rate | N/A | 10.0% | new metric |
+| Forced-fallback rate | N/A | 0.0% | new metric |
+| Hallucinated citation rate | N/A | **0.0%** | new metric |
+| Faithfulness | 0.842 | 0.833 | -0.008 (RAGAS noise) |
+| Answer relevancy | 0.832 | 0.812 | -0.021 (stricter answers) |
+| Context precision | 0.895 | 0.895 | +0.000 (retrieval unchanged) |
+| Avg generate latency (s) | 101.4 | 125.4 | +24.0 (1 retry + variance) |
+
+**Reading the numbers:** retrieval is structurally unchanged from Day 8, so
+recall@5 stays at 100% and context_precision stays at 0.895. The RAGAS
+scores drift down a fraction (within their 5-10% noise band) because
+citation-constrained answers tend to be shorter and more literal, which
+the judge LLM sometimes rates as less "fluent." The new value lives in
+the citation metrics: **100% of answers carried verified citations and
+zero of them hallucinated a source or page that wasn't actually
+retrieved.** The retry caught the single failure case and corrected it
+without ever falling back to the safe refusal.
+
+### Full project story (Day 6 baseline → Day 9)
+
+| Metric | Baseline | Day 9 | Delta |
+|--------|----------|-------|-------|
+| Retrieval recall@5 | 70.0% | **100.0%** | **+30.0%** |
+| Faithfulness | 0.719 | 0.833 | +0.115 |
+| Answer relevancy | 0.649 | 0.812 | +0.162 |
+| Context precision | 0.580 | 0.895 | +0.315 |
+| Hallucinated citation rate | unmeasured | **0.0%** | — |
+| Honest refusal capability | none | yes | — |
+| Avg retrieve latency (s) | 0.15 | 13.41 | +13.26 |
+| Avg generate latency (s) | 76.4 | 125.4 | +49.0 |
+
+The system has transitioned from "demo-quality" (Day 6) to "trustworthy"
+(Day 9): every answer is either backed by verified citations or
+transparently refused. Out-of-corpus questions like *"What is the capital
+of France?"* now correctly refuse instead of hallucinating from the LLM's
+training knowledge.
+
+### Architecture today
+
+```
+answer()
+├── RerankedRetriever (hybrid + cross-encoder rerank)
+├── generate (LLM)
+├── validate_citations  ──→  parse [filename.pdf, page N], check each
+│                            against retrieved chunks
+├── if invalid: retry once with stronger reminder prompt
+└── if still invalid: replace with safe refusal
+```
+
+Latest results: `evals/results/eval_20260604_133832.json`
+
 ## Progress log
 - [x] **Day 1**: Project setup, Ollama installed, models pulled, folder structure, deps installed
 - [x] **Phase 1**: Hello World RAG (basic vector search + LLM)
@@ -282,7 +351,7 @@ Latest results: `evals/results/eval_20260603_190356.json`
 - [x] **Day 5.5**: Multi-document support via CLI
 - [x] **Phase 3**: Evaluation foundation (golden set + RAGAS) — 10 questions, baseline captured
 - [x] **Phase 4**: Hybrid retrieval + reranking (both done)
-- [ ] **Phase 5**: Citation enforcement
+- [x] **Phase 5**: Citation enforcement (parse, validate, retry, refuse)
 - [ ] **Phase 6**: CI regression gating (GitHub Actions)
 - [ ] **Phase 7**: Deploy to Hugging Face Spaces
 
@@ -380,3 +449,15 @@ Latest results: `evals/results/eval_20260603_190356.json`
 - **Pure rerank contribution (hybrid → Day 8)**: context_precision +0.176 even though recall was already saturated at 100% — the rerank improves chunk *ordering*, not just hit-rate. Faithfulness drifted -0.008, well within RAGAS noise
 - Retrieve latency went from 0.17s → 11.78s on CPU (the trade-off for joint-encoding 20 candidates); generate latency actually dropped slightly (-4.4s) on more focused contexts
 - Goal for Day 9: Phase 5 — citation enforcement (LLM must cite valid sources or refuse to answer)
+
+### Day 9 — 2026-06-04
+- Built regex-based citation validator at `src/generate/citation_validator.py` — parses `[filename.pdf, page N]` citations, looks each one up against the chunks the retriever actually surfaced, classifies the answer as valid / invalid / refusal
+- Hardened the system prompt: every factual claim now MUST be followed by `[filename.pdf, page N]`, "fake" page numbers are explicitly forbidden, and a literal refusal string is required when context is insufficient
+- Rewrote `rag.py`'s `answer()` as a 4-step pipeline: retrieve → generate → validate → (if invalid) retry once with a stronger reminder → (if still invalid) replace with a safe refusal. Captures `is_valid`, `is_refusal`, `retried`, `fallback_used`, `num_parsed/valid/invalid` on every call and emits them as Langfuse metadata
+- Updated `src/eval/run.py` to delegate to `answer()` (so the eval exercises the same validate/retry/refuse path real users hit), added a `compute_citation_metrics()` aggregator, and a `[2.5/3]` print section reporting valid_rate / refusal_rate / retry_rate / fallback_rate / hallucinated_citation_rate
+- Extended `src/eval/compare.py` with a "Citation enforcement" block that handles `None` baselines so old result files still work
+- Added a citation status badge to `app.py` — ✅ verified / 🛡️ refused / ⚠️ unverified — rendered in both the history view and live-query view via a shared `render_citation_badge()` helper
+- Validator unit test passed all 6 cases; smoke-test confirmed *"What is the capital of France?"* now refuses instead of hallucinating Paris
+- **Fourth eval run**: 100% valid answer rate, **0% hallucinated citation rate**, 10% retry rate (1 of 10 caught + corrected), 0% forced-fallback rate. RAGAS drifted slightly (-0.008 faithfulness, -0.021 relevancy) within noise — expected when answers become more literal under citation discipline
+- **End-to-end (baseline → Day 9)**: recall@5 +30.0%, faithfulness +0.115, answer_relevancy +0.162, context_precision +0.315, plus the new trust layer
+- Goal for Day 10/11: Phase 6 — CI regression gating (GitHub Actions running the eval on every PR, blocking merges if quality drops)

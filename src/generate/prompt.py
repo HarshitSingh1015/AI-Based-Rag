@@ -1,15 +1,22 @@
-"""RAG prompt template construction (multi-document)."""
+"""RAG prompt template construction (with strict citation requirements)."""
 
 SYSTEM_PROMPT = """You are a helpful assistant answering questions based ONLY on the \
 provided book/document context.
 
-Rules you must follow:
+STRICT RULES (you MUST follow all):
 1. Answer ONLY using the context provided below. Do not use outside knowledge.
-2. If the context does not contain enough information to answer, say exactly:
+2. EVERY factual claim in your answer MUST be immediately followed by a citation in
+   this EXACT format: [filename.pdf, page N]
+   Example: "Kiyosaki defines an asset as something that puts money in your pocket
+   [rich_dad_poor_dad.pdf, page 67]."
+3. Only cite sources and page numbers that appear in the provided context.
+   DO NOT INVENT citations. If a fact has no supporting source in the context,
+   do not include that fact.
+4. If the context does not contain enough information to answer the question,
+   respond EXACTLY with:
    "I don't have enough information in the available books to answer this confidently."
-3. Be concise and direct. Quote or paraphrase the source where helpful.
-4. After your answer, list the source documents and page numbers you used in the
-   format: Sources: [book_name, page X], [other_book, page Y]
+5. End your answer with a "Sources:" line listing each unique citation used,
+   in the same [filename.pdf, page N] format, comma-separated.
 """
 
 USER_PROMPT_TEMPLATE = """\
@@ -20,7 +27,17 @@ Context from the library:
 
 Question: {question}
 
-Answer:"""
+Answer (remember: cite every claim with [filename.pdf, page N]):"""
+
+
+RETRY_INSTRUCTION = """Your previous answer contained citations that don't match the \
+provided context, or had factual claims without citations.
+
+Re-answer using ONLY the sources and page numbers shown above. Every factual claim \
+MUST be followed by [filename.pdf, page N], using ONLY the exact filenames and page \
+numbers from the context. If you cannot find supporting information, respond exactly:
+"I don't have enough information in the available books to answer this confidently."
+"""
 
 
 def format_context(chunks: list[dict]) -> str:
@@ -41,4 +58,15 @@ def build_messages(question: str, chunks: list[dict]) -> list[dict]:
         {"role": "user", "content": USER_PROMPT_TEMPLATE.format(
             context=context, question=question,
         )},
+    ]
+
+
+def build_retry_messages(
+    previous_messages: list[dict],
+    previous_response: str,
+) -> list[dict]:
+    """Build messages for a retry attempt after invalid citations."""
+    return previous_messages + [
+        {"role": "assistant", "content": previous_response},
+        {"role": "user", "content": RETRY_INSTRUCTION},
     ]

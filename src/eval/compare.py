@@ -62,6 +62,30 @@ def compare(baseline_path: Path, new_path: Path) -> None:
           f"{fmt_delta(n_lat_g - b_lat_g):>14}")
 
     print("\n" + "=" * 72)
+    print("Citation enforcement metrics")
+    print("=" * 72)
+    print(f"{'Metric':<28} {'Baseline':>12} {'New':>12} {'Delta':>14}")
+    print("-" * 72)
+    for key, label in [
+        ("valid_rate", "Valid answer rate"),
+        ("refusal_rate", "Honest refusal rate"),
+        ("retry_rate", "Retry rate"),
+        ("fallback_rate", "Forced-fallback rate"),
+        ("hallucinated_citation_rate", "Hallucinated citation rate"),
+    ]:
+        b_val = b.get("citation_metrics", {}).get(key)
+        n_val = n.get("citation_metrics", {}).get(key)
+        if b_val is None and n_val is None:
+            continue
+        if b_val is None:
+            print(f"{label:<28} {'N/A':>12} {n_val:>12.1%} {'new metric':>14}")
+        elif n_val is None:
+            print(f"{label:<28} {b_val:>12.1%} {'N/A':>12} {'removed':>14}")
+        else:
+            print(f"{label:<28} {b_val:>12.1%} {n_val:>12.1%} "
+                  f"{fmt_delta(n_val - b_val, is_pct=True):>14}")
+
+    print("\n" + "=" * 72)
     print("Per-question retrieval hits (did expected source appear in top-k?)")
     print("=" * 72)
     print(f"{'ID':<14} {'Baseline':<12} {'New':<12} {'Change':<20}")
