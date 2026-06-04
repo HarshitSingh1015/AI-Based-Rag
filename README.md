@@ -504,3 +504,15 @@ RAG-quality metrics.
 - **Fourth eval run**: 100% valid answer rate, **0% hallucinated citation rate**, 10% retry rate (1 of 10 caught + corrected), 0% forced-fallback rate. RAGAS drifted slightly (-0.008 faithfulness, -0.021 relevancy) within noise — expected when answers become more literal under citation discipline
 - **End-to-end (baseline → Day 9)**: recall@5 +30.0%, faithfulness +0.115, answer_relevancy +0.162, context_precision +0.315, plus the new trust layer
 - Goal for Day 10/11: Phase 6 — CI regression gating (GitHub Actions running the eval on every PR, blocking merges if quality drops)
+
+### Day 10 — 2026-06-04
+- Added pytest unit tests for citation_validator, chunker, RRF math — 21 tests across `tests/test_citation_validator.py`, `tests/test_chunker.py`, `tests/test_rrf.py`, all passing in ~3.5s
+- Created `evals/baseline.json` frozen from the Day 9 result (recall@5=1.0, faithfulness=0.833, relevancy=0.812, context_precision=0.895, citation_valid_rate=1.0, hallucinated_rate=0.0)
+- Built `src/eval/check_baseline.py` — exit-code-based regression gate with per-metric thresholds (5pp for quality metrics, 2.0s/30s for retrieve/generate latency)
+- Modified `src/eval/run.py` to auto-write `evals/latest_summary.json` after every eval, so the slow CI tier (full RAGAS) and the fast CI tier (committed summary check) share a single source of truth
+- Created `.github/workflows/ci.yml` with two jobs: `Tests + Lint` (pytest + non-blocking ruff) and `Eval Baseline Gate` (runs `check_baseline.py`)
+- Documented the two-tier workflow in `CONTRIBUTING.md` (fast tier on every PR, slow tier locally before major RAG changes)
+- **Local demo confirmed the gate works**: tampered `recall_at_k` from 1.0 → 0.5, ran `check_baseline.py`, got `REGRESSION: 1 metric(s) outside threshold` and exit code 1
+- **PR-blocking demo confirmed on GitHub**: pushed a `demo-regression-block` branch with the tampered summary, opened a PR, watched the Eval Baseline Gate job fail (Tests+Lint stayed green — exactly the expected isolation), closed without merging, branch deleted both sides
+- Rotated the old Day-1 PAT (which had been pasted in chat) and regenerated one with `workflow` scope so GitHub would accept the workflow file
+- Goal for Day 11+: Day 13 (multi-format support + Streamlit drag-and-drop) OR Phase 7 (deploy to Hugging Face Spaces) — user's choice
