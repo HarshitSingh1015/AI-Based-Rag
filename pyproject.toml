@@ -5,12 +5,14 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "chardet>=7.4.3",
     "chromadb>=1.5.9",
     "datasets>=4.8.5",
     "langchain-ollama>=0.2.0,<0.3.0",
     "langfuse>=2.50.0,<3.0.0",
     "ollama>=0.6.2",
     "pypdf>=6.12.2",
+    "python-docx>=1.2.0",
     "python-dotenv>=1.2.2",
     "ragas>=0.2.0,<0.3.0",
     "rank-bm25>=0.2.2",

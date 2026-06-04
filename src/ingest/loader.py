@@ -1,44 +1,53 @@
-"""PDF loading utility for the RAG ingestion pipeline."""
+"""Universal document loader. Routes by file extension to format-specific loaders."""
 from pathlib import Path
-from pypdf import PdfReader
+
+from src.ingest import format_loaders
+
+SUPPORTED_EXTENSIONS = {
+    ".pdf": format_loaders.load_pdf,
+    ".txt": format_loaders.load_txt,
+    ".md": format_loaders.load_md,
+    ".markdown": format_loaders.load_md,
+    ".docx": format_loaders.load_docx,
+    ".py": format_loaders.load_code,
+    ".js": format_loaders.load_code,
+    ".ts": format_loaders.load_code,
+    ".tsx": format_loaders.load_code,
+    ".jsx": format_loaders.load_code,
+    ".java": format_loaders.load_code,
+    ".cpp": format_loaders.load_code,
+    ".c": format_loaders.load_code,
+    ".h": format_loaders.load_code,
+    ".go": format_loaders.load_code,
+    ".rs": format_loaders.load_code,
+    ".rb": format_loaders.load_code,
+    ".php": format_loaders.load_code,
+    ".sh": format_loaders.load_code,
+}
 
 
-def load_pdf(pdf_path: str | Path) -> list[dict]:
-    """Load a PDF file and return a list of page-level documents.
+def load_document(path: str | Path) -> list[dict]:
+    """Load a document of any supported format.
 
-    Args:
-        pdf_path: Path to the PDF file.
-
-    Returns:
-        A list of dicts, each with keys:
-        - page_num (int, 1-indexed)
-        - text (str, the extracted text from that page)
-        - source (str, the PDF filename)
-
-        Pages with no extractable text are skipped.
+    Returns list of dicts: [{"page_num": int, "text": str, "source": str}, ...]
+    Raises ValueError if extension is unsupported.
+    Raises FileNotFoundError if file does not exist.
     """
-    pdf_path = Path(pdf_path)
-    if not pdf_path.exists():
-        raise FileNotFoundError(f"PDF not found: {pdf_path}")
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"File not found: {path}")
 
-    reader = PdfReader(str(pdf_path))
-    pages: list[dict] = []
-    for i, page in enumerate(reader.pages, start=1):
-        text = (page.extract_text() or "").strip()
-        if text:
-            pages.append({
-                "page_num": i,
-                "text": text,
-                "source": pdf_path.name,
-            })
-    return pages
+    ext = path.suffix.lower()
+    if ext not in SUPPORTED_EXTENSIONS:
+        supported = ", ".join(sorted(SUPPORTED_EXTENSIONS.keys()))
+        raise ValueError(
+            f"Unsupported file format: {ext}. Supported: {supported}"
+        )
+
+    loader_fn = SUPPORTED_EXTENSIONS[ext]
+    return loader_fn(path)
 
 
-if __name__ == "__main__":
-    import sys
-    if len(sys.argv) < 2:
-        print("Usage: python -m src.ingest.loader <pdf_path>")
-        sys.exit(1)
-    pages = load_pdf(sys.argv[1])
-    print(f"Loaded {len(pages)} pages with text")
-    print(f"First page preview: {pages[0]['text'][:200]}...")
+def load_pdf(path: str | Path) -> list[dict]:
+    """Backward-compatible PDF loader. Prefer load_document() going forward."""
+    return format_loaders.load_pdf(Path(path))

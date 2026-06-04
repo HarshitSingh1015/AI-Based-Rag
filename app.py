@@ -107,9 +107,16 @@ across your personal book library.
             st.markdown(f"- `{source}` ({count} chunks)")
     else:
         st.warning(
-            "No books loaded yet. From the project folder run:\n\n"
-            "`uv run python ingest.py data/raw/<your_book.pdf>`"
+            "No documents loaded yet. From the project folder run:\n\n"
+            "`uv run python ingest.py data/raw/<your_file>`\n\n"
+            "or `uv run python ingest.py --all` to ingest everything in `data/raw/`."
         )
+
+    st.divider()
+    st.subheader("📂 Supported formats")
+    st.caption(
+        "PDF • TXT • Markdown • DOCX • Python • JS/TS • Java • Go • Rust • C/C++ • Shell"
+    )
 
     st.divider()
     st.subheader("Settings")

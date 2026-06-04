@@ -175,8 +175,36 @@ set in `evals/golden_set.jsonl`.
 - Committed and pushed; verified all screenshots and the mermaid
   diagram render correctly on GitHub.
 
-### Day 12+ (planned)
-- **Day 12**: Multi-format ingestion (TXT/MD/DOCX/code).
+### Day 12 — Multi-format ingestion
+- Built `src/ingest/format_loaders.py` with 5 format adapters (PDF,
+  TXT, Markdown, DOCX, code). All return the same `[{page_num, text,
+  source}, ...]` shape so nothing downstream needed to change.
+- Refactored `src/ingest/loader.py` into a dispatcher keyed by file
+  extension; kept `load_pdf` as a backward-compatibility shim.
+- Total of 19 supported extensions: `.pdf .txt .md .markdown .docx`
+  for documents, plus `.py .js .ts .tsx .jsx .java .cpp .c .h .go
+  .rs .rb .php .sh` for code.
+- Logical "pages" for non-paginated formats: 50-line blocks for
+  prose, 30-line blocks for code. Citations remain meaningful
+  (`[notes.md, page 1]`).
+- Encoding-safe text reading: UTF-8 first, then `chardet` detection,
+  then `latin-1` with replacement — never crashes on a weird file.
+- `ingest.py` rewritten to accept arbitrary paths or `--all` (which
+  auto-discovers any supported file in `data/raw/`).
+- Added 14 unit tests for the format loaders and dispatcher
+  (encoding fallback, line-count splitting, extension routing,
+  unsupported-format error path, missing-file error path).
+- All previous metrics preserved (no retrieval/generation changes).
+  The CI baseline gate still passes because `evals/latest_summary.json`
+  is untouched.
+- Real ingestion proof: TXT, MD, and PY fixtures ingested into
+  ChromaDB (1066 → 1070 chunks), then retrieval verified that each
+  format's unique "secret keyword" returns the correct source file
+  in the top-1 position.
+- Total test count: 21 → **35 passing in ~3.2s**.
+- The system is now a true "Ask My Docs," not just "Ask My PDFs."
+
+### Day 13+ (planned)
 - **Day 13**: Browser file-uploader UI.
 - **Day 14**: Backend abstraction (local Ollama ↔ cloud Groq).
 - **Day 15**: Deploy to Hugging Face Spaces (public URL).

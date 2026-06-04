@@ -17,11 +17,14 @@ walkthrough — coming with the Day 16 blog post).
 
 ## What it does
 
+- **Multi-format ingestion**: PDFs, plain text, Markdown, Word
+  documents, and source code (Python, JS/TS, Java, Go, Rust, C/C++,
+  shell). 19 file extensions, one dispatcher.
 - **Hybrid retrieval**: BM25 keyword search + semantic vector search
   fused with Reciprocal Rank Fusion, then re-scored by a
   cross-encoder.
 - **Citation enforcement**: every answer must cite a real
-  `[filename.pdf, page N]` from the retrieved chunks — or the system
+  `[filename.ext, page N]` from the retrieved chunks — or the system
   refuses honestly. Hallucinated-citation rate on the golden set:
   **0.0%**.
 - **Observability**: every query produces a Langfuse trace with
@@ -106,8 +109,13 @@ ollama pull llama3.1:8b
 cp .env.example .env
 # fill in Langfuse keys (optional but recommended)
 
-# Drop a PDF in data/raw/, then ingest:
+# Drop ANY supported document into data/raw/
+# (PDF, TXT, MD, DOCX, .py, .js, .ts, .java, .go, .rs, .c, .cpp, ...)
+# then ingest everything:
 uv run python ingest.py --all
+
+# ...or ingest specific files:
+uv run python ingest.py data/raw/my_notes.md data/raw/script.py
 
 uv run streamlit run app.py
 ```
